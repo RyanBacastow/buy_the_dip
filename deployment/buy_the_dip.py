@@ -34,7 +34,7 @@ def publish_message_sns(message):
         print("ERROR PUBLISHING MESSAGE TO SNS: {}".format(e))
 
 
-def read_tickers(file='deployment/stock_tickers.txt', period='5y'):
+def read_tickers(file='stock_tickers.txt', period='5y'):
     pairs = dict()
     out_string = "\nINDIVIDUAL STATS:\n"
 
@@ -87,4 +87,5 @@ def handler(event, context):
     message += out_string
     print(message)
     publish_message_sns(message)
+    return message
 
