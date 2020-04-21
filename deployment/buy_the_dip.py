@@ -45,26 +45,31 @@ def read_tickers(file='stock_tickers.txt', period='5y'):
 
     with open(file, 'r') as f:
         while True:
-            # Get next line from file 
-            ticker = (f.readline()).strip()
+            try:
+                # Get next line from file
+                ticker = (f.readline()).strip()
 
-            if ticker == "":
-                break
-            else:
-                print(ticker)
+                if ticker == "":
+                    break
+                else:
+                    print(ticker)
 
-            stock = yf.Ticker(ticker)
-            data = stock.history(env.get('PERIOD', period))
-            
-            close = data.Close[-1]
-            high = max(data.Close)
-            
-            delta = calc_stock(high, close)
- 
-            pairs[ticker] = delta
+                stock = yf.Ticker(ticker)
+                data = stock.history(env.get('PERIOD', period))
 
-            if not ticker:
-                break
+                close = data.Close[-1]
+                high = max(data.Close)
+
+                delta = calc_stock(high, close)
+
+                pairs[ticker] = delta
+
+                if not ticker:
+                    break
+            except Exception as e:
+                print(e)
+                if not ticker:
+                    break
         
     return(sorted(pairs.items(), key=lambda x: x[1]))
 
