@@ -1,0 +1,8 @@
+# pycharm IDE user's config dir:
+.idea/
+ __pycache__/
+ venv/
+.DS_Store
+.pytest_cache/
+*.pyc
+iwin_frozen_etl_lambda_*.zip
