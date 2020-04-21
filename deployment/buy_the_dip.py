@@ -2,7 +2,7 @@
 # coding: utf-8
 
 import yfinance as yf
-import boto
+import boto3
 from os import environ as env
 
 
@@ -51,7 +51,7 @@ def read_tickers(file='stock_tickers.txt', period='5y'):
                 break
 
             stock = yf.Ticker(ticker)
-            data = stock.history(os.environ.get('PERIOD', period))
+            data = stock.history(env.get('PERIOD', period))
             
             close = data.Close[-1]
             high = max(data.Close)
