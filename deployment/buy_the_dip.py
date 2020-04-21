@@ -17,7 +17,7 @@ def convert_tuple(tup):
 
 def create_message(pairs):
     message = "Ordered Portfolio:\n"
-    for pair in d:
+    for pair in pairs:
         message += convert_tuple(pair) + "\n"
     
     
