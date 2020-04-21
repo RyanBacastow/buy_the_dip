@@ -15,7 +15,6 @@ build_deployment_dependencies:
 	docker rm -f dummy_container_1
 
 init:
-	rm deploymen.zip
 	pip3 install -r requirements.txt
 
 deploy_prod:

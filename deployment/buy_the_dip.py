@@ -19,6 +19,7 @@ def create_message(pairs):
     message = "Ordered Portfolio:\n"
     for pair in pairs:
         message += convert_tuple(pair) + "\n"
+    return message
     
     
 def publish_message_sns(message):
@@ -46,9 +47,11 @@ def read_tickers(file='stock_tickers.txt', period='5y'):
         while True:
             # Get next line from file 
             ticker = (f.readline()).strip()
-            
+
             if ticker == "":
                 break
+            else:
+                print(ticker)
 
             stock = yf.Ticker(ticker)
             data = stock.history(env.get('PERIOD', period))
@@ -72,7 +75,7 @@ def handler(event, context):
     you want to publish. 
     """
     pairs = read_tickers()
-    messsage = create_message(pairs)
+    message = create_message(pairs)
     print(message)
     #AWS LIVE VERSION ONLY:
     publish_message_sns(message)
