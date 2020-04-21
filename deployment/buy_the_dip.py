@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import yfinance as yf
+import boto
+from os import environ as env
+
 
 def calc_stock(high, current):
     ratio = (current - high) / high
