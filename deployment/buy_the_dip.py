@@ -7,10 +7,6 @@ import yfinance as yf
 import pandas as pd
 
 
-# !/usr/bin/env python
-# coding: utf-8
-
-
 def calc_stock(high, current):
     """
     :param high: float
@@ -60,75 +56,76 @@ def publish_message_sns(message):
         print("ERROR PUBLISHING MESSAGE TO SNS: {}".format(e))
 
 
-def get_data(ticker, period):
+def get_data(tickers_list, period):
     """
-    :param ticker: str: stock ticker
+    :param tickers: str: stock ticker string
     :param period: str: valid date period for comparison
     :return: temp_string, delta: str, float: stock printing statements and ratio are returned
     """
+    pairs = dict()
     temp_string = ""
-    stock = yf.Ticker(ticker)
-    data = stock.history(env.get('PERIOD', period))
+    tickers = " ".join([x.upper() for x in tickers_list]).strip()
+    stocks = yf.Tickers(tickers)
+    data = stocks.history(env.get('PERIOD', period))
 
-    close = data.Close[-1]
-    close_date = data.index[-1]
-    temp_string += "{} Close {}: {}\n".format(ticker, str(close_date), str(close))
+    for ticker in tickers_list:
+        close = data.Close[ticker][-1]
+        close_date = data.index[-1]
+        temp_string += "{} Close {}: {}\n".format(ticker, str(close_date), str(close))
 
-    high = max(data.Close)
-    temp_string += "{} {}-High: {}\n".format(ticker, env.get('PERIOD', period), str(high))
+        high = max(data.Close[ticker])
+        temp_string += "{} {}-High: {}\n".format(ticker, env.get('PERIOD', period), str(high))
 
-    delta = calc_stock(high, close)
+        delta = calc_stock(high, close)
+        pairs[ticker] = delta
 
-    temp_string += "{} Delta: {}\n".format(ticker, str(delta)) + "\n"
+        temp_string += "{} Delta: {}\n".format(ticker, str(delta)) + "\n"
 
-    return temp_string, delta
+    return temp_string, pairs
 
 
-def read_tickers(mode='personal', period='1y'):
+def read_tickers(mode='period', period='5y'):
     """
     :param mode: str: personal will use personal_portfolio_stock_tickers.txt. Any other mode will simply use the S&P500
     :param period: str: valid period.
     :return: out_string,sorted(pairs.items(), key=lambda x: x[1]): str, list: string for message and sorted dict in list
     """
-    pairs = dict()
-    out_string = "\n\nPERSONAL PORTFOLIO INDIVIDUAL STATS:\n\n"
+    out_string = "\n\nPERSONAL PORTFOLIO INDIVIDUAL HOLDING STATS:\n\n"
 
     if mode == 'personal':
+        tickers_list = []
         print("\nRunning program on personal portfolio with period {}...\n".format(period))
         with open('personal_portfolio_stock_tickers.txt', 'r') as f:
             while True:
-                try:
-                    ticker = (f.readline()).strip()
-                    if ticker == "":
-                        break
+                ticker = (f.readline()).strip()
+                if ticker == "":
+                    break
+                tickers_list.append(ticker)
+                if not ticker:
+                    break
 
-                    temp_string, delta = get_data(ticker, period)
-                    out_string += temp_string
+            try:
+                temp_string, pairs = get_data(tickers_list, period)
+                out_string += temp_string
 
-                    pairs[ticker] = delta
-                    if not ticker:
-                        break
-
-                except Exception as e:
-                    print("ERROR WITH TICKER {}: {}".format(ticker, e))
-                    if not ticker:
-                        break
+            except Exception as e:
+                print(e)
+                print("ERROR WITH TICKER {}: {}".format(ticker, e))
 
     else:
         print("\nRunning program on full S&P with period {}...\n".format(period))
         table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
         df = table[0]
-        tickers = df.Symbol
-        for ticker in tickers:
-            if '.' in ticker:
-                ticker = ticker.replace(".", "-")
-            try:
-                temp_string, delta = get_data(ticker, period)
-                out_string += temp_string
-                pairs[ticker] = delta
+        df['Symbol'] = df['Symbol'].str.replace('.', '')
+        tickers_list = df.Symbol
 
-            except Exception as e:
-                print("ERROR WITH TICKER {}: {}".format(ticker, e))
+        try:
+            temp_string, pairs = get_data(tickers_list, period)
+            out_string += temp_string
+
+        except Exception as e:
+            print(e)
+            print("ERROR WITH TICKER {}: {}".format(ticker, e))
 
     return out_string, sorted(pairs.items(), key=lambda x: x[1])
 
