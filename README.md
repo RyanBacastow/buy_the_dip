@@ -15,4 +15,7 @@
 
 If you've never built a lambda -> SNS widget before, you can start with a tutorial [here](https://www.youtube.com/watch?v=PsJsP-7cydk).
 
+An example email looks like this:
+![example_photo](example_email.png "Example email")
+
 Happy Hunting!
