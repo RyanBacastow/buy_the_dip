@@ -9,7 +9,7 @@
   	- SNS_TOPIC: string value of the AWS SNS topic which your email or phone is subscribed to for this function.
   	- PERIOD: string value, valid periods: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max
  - **SNS Topic**: You will subscribe your email to the SNS Topic.
- - **Cloudwatch Event Trigger**: This will be how you trigger the function at the close of the NYSE each day.
+ - **Cloudwatch Event Trigger**: This will be how you trigger the function at the close of the NYSE each day. use cron(30 20 ? * MON-FRI *) for a thirty minute buffer.
 
 *Simply add or remove assets from the stock_tickers.txt file to adjust which securities you'd like to get updates on.*
 
