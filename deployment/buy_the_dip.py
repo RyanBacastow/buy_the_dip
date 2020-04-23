@@ -72,10 +72,10 @@ def get_data(tickers_list, period):
             df.dropna(inplace=True)
             close = df[-1]
             close_date = df.index[-1]
-            temp_string += f"{ticker} Close {close_date.strftime('%Y-%m-%d')}: {close}\n"
+            temp_string += f"{ticker} Close {close_date.strftime('%Y-%m-%d')}: {close:.2f}\n"
 
             high = max(df)
-            temp_string += f"{ticker} {env.get('PERIOD', period)}-High: {high}\n"
+            temp_string += f"{ticker} {env.get('PERIOD', period)}-High: {high:.2f}\n"
 
             delta = calc_stock(high, close)
             pairs[ticker] = delta
