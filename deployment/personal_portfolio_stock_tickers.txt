@@ -51,7 +51,6 @@ SQ
 SBUX
 T
 TMUS
-UCO
 V
 VZ
 WFC

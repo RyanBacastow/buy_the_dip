@@ -31,9 +31,15 @@ def create_message(pairs, mode='personal'):
     :param pairs: dict: contains ranked pairs
     :return: message: str: string of ranked pairs
     """
-    message = f"\n\n{mode.upper()} ORDERED RATIOS:\n\n"
-    for pair in pairs:
-        message += convert_tuple(pair) + "\n"
+    if mode != 'legend':
+        message = f"\n\n{mode.upper()} ORDERED RATIOS:\n\n"
+        for pair in pairs:
+            message += convert_tuple(pair) + "\n"
+    else:
+        message = "\n\nS&P TICKER LEGEND\n\n"
+        for company in pairs:
+            message += f"{company} : {pairs[company]}\n"
+
     return message
 
 
@@ -93,9 +99,9 @@ def read_tickers(mode='period', period='5y'):
     :param period: str: valid period.
     :return: out_string,sorted(pairs.items(), key=lambda x: x[1]): str, list: string for message and sorted dict in list
     """
-    out_string = "\n\nPERSONAL PORTFOLIO INDIVIDUAL HOLDING STATS:\n\n"
 
     if mode == 'personal':
+        out_string = "\n\nPERSONAL PORTFOLIO INDIVIDUAL HOLDING STATS:\n\n"
         tickers_list = []
         print(f"\nRunning program on personal portfolio with period {period}...\n")
         with open('personal_portfolio_stock_tickers.txt', 'r') as f:
@@ -106,7 +112,6 @@ def read_tickers(mode='period', period='5y'):
                 tickers_list.append(ticker)
                 if not ticker:
                     break
-
             try:
                 temp_string, pairs = get_data(tickers_list, period)
                 out_string += temp_string
@@ -115,11 +120,15 @@ def read_tickers(mode='period', period='5y'):
                 print(e)
                 print(f"ERROR WITH TICKER {ticker}: {e}")
 
+        return out_string, sorted(pairs.items(), key=lambda x: x[1])
+
     else:
+        out_string = "\n\n"
         print(f"\nRunning program on full S&P with period {period}...\n")
         table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
         df = table[0]
         df['Symbol'] = df['Symbol'].str.replace('.', '')
+        company_names = dict(zip(df.Symbol, df.Security))
         tickers_list = [x for x in df.Symbol]
 
         try:
@@ -128,10 +137,8 @@ def read_tickers(mode='period', period='5y'):
 
         except Exception as e:
             print(e)
-            print(f"ERROR WITH TICKER {ticker}: {e}")
 
-    print(out_string)
-    return out_string, sorted(pairs.items(), key=lambda x: x[1])
+        return out_string, sorted(pairs.items(), key=lambda x: x[1]), company_names
 
 
 def handler(event, context):
@@ -141,9 +148,12 @@ def handler(event, context):
     """
     personal_string, personal_pairs = read_tickers(mode='personal', period='10d')
     message = create_message(personal_pairs, mode='personal')
-    message += personal_string + "\n\n–––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––\n\n"
+    message += personal_string + "\n\n––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––\n\n"
 
-    snp_string, snp_pairs = read_tickers(mode='s&p', period='10d')
+    snp_string, snp_pairs, company_names = read_tickers(mode='S&P', period='10d')
     message += create_message(snp_pairs, 'S&P')
+
+    message += "\n\n––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––\n\n"
+    message += create_message(company_names, mode='legend')
     publish_message_sns(message)
     return message
