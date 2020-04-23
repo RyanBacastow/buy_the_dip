@@ -13,7 +13,7 @@ def calc_stock(high, current):
     :param current: float
     :return: ratio: float
     """
-    ratio = (current - high) / high
+    ratio = round(((current - high) / high) * 100, 2)
     return ratio
 
 
@@ -22,7 +22,7 @@ def convert_tuple(tup):
     :param tup: tuple: tuple containing ranked pairs
     :return: string_tup: str: stringified version of incoming tuple
     """
-    string_tup = "{} : {}".format(tup[0], str(tup[1]))
+    string_tup = f"{tup[0]} : {tup[1]}"
     return string_tup
 
 
@@ -31,7 +31,7 @@ def create_message(pairs, mode='personal'):
     :param pairs: dict: contains ranked pairs
     :return: message: str: string of ranked pairs
     """
-    message = "\n\n{} ORDERED RATIOS:\n\n".format(mode.upper())
+    message = f"\n\n{mode.upper()} ORDERED RATIOS:\n\n"
     for pair in pairs:
         message += convert_tuple(pair) + "\n"
     return message
@@ -50,10 +50,8 @@ def publish_message_sns(message):
             Message=message
         )
 
-        print(response)
-
     except Exception as e:
-        print("ERROR PUBLISHING MESSAGE TO SNS: {}".format(e))
+        print(f"ERROR PUBLISHING MESSAGE TO SNS: {e}")
 
 
 def get_data(tickers_list, period):
@@ -66,20 +64,25 @@ def get_data(tickers_list, period):
     temp_string = ""
     tickers = " ".join([x.upper() for x in tickers_list]).strip()
     stocks = yf.Tickers(tickers)
-    data = stocks.history(env.get('PERIOD', period))
+    data = stocks.history(env.get('PERIOD', period))['Close']
 
     for ticker in tickers_list:
-        close = data.Close[ticker][-1]
-        close_date = data.index[-1]
-        temp_string += "{} Close {}: {}\n".format(ticker, str(close_date), str(close))
+        try:
+            df = data[ticker]
+            df.dropna(inplace=True)
+            close = df[-1]
+            close_date = df.index[-1]
+            temp_string += f"{ticker} Close {close_date.strftime('%Y-%m-%d')}: {close}\n"
 
-        high = max(data.Close[ticker])
-        temp_string += "{} {}-High: {}\n".format(ticker, env.get('PERIOD', period), str(high))
+            high = max(df)
+            temp_string += f"{ticker} {env.get('PERIOD', period)}-High: {high}\n"
 
-        delta = calc_stock(high, close)
-        pairs[ticker] = delta
+            delta = calc_stock(high, close)
+            pairs[ticker] = delta
 
-        temp_string += "{} Delta: {}\n".format(ticker, str(delta)) + "\n"
+            temp_string += f"{ticker} Delta: {delta}\n\n"
+        except KeyError as ke:
+            print(f"Couldn't find {ticker} in data")
 
     return temp_string, pairs
 
@@ -94,7 +97,7 @@ def read_tickers(mode='period', period='5y'):
 
     if mode == 'personal':
         tickers_list = []
-        print("\nRunning program on personal portfolio with period {}...\n".format(period))
+        print(f"\nRunning program on personal portfolio with period {period}...\n")
         with open('personal_portfolio_stock_tickers.txt', 'r') as f:
             while True:
                 ticker = (f.readline()).strip()
@@ -110,14 +113,14 @@ def read_tickers(mode='period', period='5y'):
 
             except Exception as e:
                 print(e)
-                print("ERROR WITH TICKER {}: {}".format(ticker, e))
+                print(f"ERROR WITH TICKER {ticker}: {e}")
 
     else:
-        print("\nRunning program on full S&P with period {}...\n".format(period))
+        print(f"\nRunning program on full S&P with period {period}...\n")
         table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
         df = table[0]
         df['Symbol'] = df['Symbol'].str.replace('.', '')
-        tickers_list = df.Symbol
+        tickers_list = [x for x in df.Symbol]
 
         try:
             temp_string, pairs = get_data(tickers_list, period)
@@ -125,8 +128,9 @@ def read_tickers(mode='period', period='5y'):
 
         except Exception as e:
             print(e)
-            print("ERROR WITH TICKER {}: {}".format(ticker, e))
+            print(f"ERROR WITH TICKER {ticker}: {e}")
 
+    print(out_string)
     return out_string, sorted(pairs.items(), key=lambda x: x[1])
 
 
