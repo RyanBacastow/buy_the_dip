@@ -222,13 +222,13 @@ def handler(event, context):
     """
     message = index_checker()
 
-    personal_string, personal_pairs = read_tickers(mode='personal', period='10d')
+    personal_string, personal_pairs = read_tickers(mode='personal', period=env.get('PERIOD', "1y"))
     message += sep + "RATIOS\n" "\nRatios can be interpreted as percentages ranging from -99.99 representing a total loss of value, to 0.00 which represents a stock is at its high point for the period selected.\n"
     message += create_message(personal_pairs, mode='personal') + sep
     message += personal_string + sep
-    nsdq_string, nsdq_pairs = read_tickers(mode='NSDQ', period='10d')
+    nsdq_string, nsdq_pairs = read_tickers(mode='NSDQ', period=env.get('PERIOD', "1y"))
     message += create_message(nsdq_pairs, mode='S&P')
-    snp_string, snp_pairs = read_tickers(mode='S&P', period='10d')
+    snp_string, snp_pairs = read_tickers(mode='S&P', period=env.get('PERIOD', "1y"))
     message += create_message(snp_pairs, mode='S&P')
     publish_message_sns(message)
 
