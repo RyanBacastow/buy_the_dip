@@ -9,8 +9,33 @@ from urllib.request import urlopen
 from contextlib import closing
 import json
 import traceback
+import wget
 
 sep = '\n-----------------------------------------------------------------\n\n'
+
+all_company_names = dict()
+
+sp_table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+sp_df = sp_table[0]
+sp_df['Symbol'] = sp_df['Symbol'].str.replace('.', '')
+sp_company_names = dict(zip(sp_df.Symbol, sp_df.Security))
+
+nsdq_table = pd.read_html("https://en.wikipedia.org/wiki/NASDAQ-100")
+nsdq_df = nsdq_table[2]
+nsdq_df['Ticker'] = nsdq_df['Ticker'].str.replace('.', '')
+nsdq_df.rename(columns={"Ticker": "Symbol", "Company": "Security"}, inplace=True)
+nsdq_company_names = dict(zip(nsdq_df.Symbol, nsdq_df.Security))
+
+link = 'ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt'
+wget.download(link, out='tmp')
+nsdq_full_df = pd.read_csv('tmp/nasdaqlisted.txt', sep='|', header=0)
+nsdq_full_df.drop(nsdq_full_df.tail(1).index, inplace=True)
+nsdq_full_company_names = dict(zip(nsdq_full_df.Symbol, nsdq_full_df['Security Name']))
+for k, v in nsdq_full_company_names.items():
+    nsdq_full_company_names[k] = v.split(' - ')[0]
+
+for d in [sp_company_names, nsdq_company_names, nsdq_full_company_names]:
+    all_company_names.update(d)
 
 
 def calc_stock(high, current):
@@ -23,9 +48,9 @@ def calc_stock(high, current):
     return ratio
 
 
-def create_message(pairs, mode='personal', company_names={}):
+def create_message(pairs, mode='personal', company_names=all_company_names):
     """
-    :param pairs: dict: contains ranked pairs
+    :param pairs: list: contains ranked pairs
     :return: message: str: string of ranked pairs
     """
     print("begin create_message")
@@ -39,7 +64,6 @@ def create_message(pairs, mode='personal', company_names={}):
         except KeyError as e:
             print(e)
             print(f"Couldn't find {k} in company_names")
-            message += f"{k} : {v}\n"
 
     return message
 
@@ -62,7 +86,7 @@ def publish_message_sns(message):
         print(f"ERROR PUBLISHING MESSAGE TO SNS: {e}")
 
 
-def get_data(tickers_list, period, company_names):
+def get_data(tickers_list, period, company_names=all_company_names):
     """
     :param tickers: str: stock ticker string
     :param period: str: valid date period for comparison
@@ -100,6 +124,7 @@ def get_data(tickers_list, period, company_names):
     print("end get_data")
     return temp_string, pairs
 
+
 def read_tickers(mode='personal', period='5y'):
     """
     :param mode: str: personal will use personal_portfolio_stock_tickers.txt. Any other mode will simply use the S&P500
@@ -107,17 +132,6 @@ def read_tickers(mode='personal', period='5y'):
     :return: out_string,sorted(pairs.items(), key=lambda x: x[1]): str, list: string for message and sorted dict in list
     """
     print("begin read_tickers")
-
-    sp_table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
-    sp_df = sp_table[0]
-    sp_df['Symbol'] = sp_df['Symbol'].str.replace('.', '')
-    sp_company_names = dict(zip(sp_df.Symbol, sp_df.Security))
-
-    nsdq_table = pd.read_html("https://en.wikipedia.org/wiki/NASDAQ-100")
-    nsdq_df = nsdq_table[2]
-    nsdq_df['Ticker'] = nsdq_df['Ticker'].str.replace('.', '')
-    nsdq_df.rename(columns={"Ticker": "Symbol", "Company": "Security"}, inplace=True)
-    nsdq_company_names = dict(zip(nsdq_df.Symbol, nsdq_df.Security))
 
     company_names = dict()
     company_names.update(sp_company_names)
@@ -136,7 +150,7 @@ def read_tickers(mode='personal', period='5y'):
                 if not ticker:
                     break
             try:
-                temp_string, pairs = get_data(tickers_list, period, company_names)
+                temp_string, pairs = get_data(tickers_list, period)
                 out_string += temp_string
 
             except Exception as e:
@@ -153,14 +167,14 @@ def read_tickers(mode='personal', period='5y'):
             tickers_list = [x for x in sp_df.Symbol]
 
         try:
-            temp_string, pairs = get_data(tickers_list, period, company_names)
+            temp_string, pairs = get_data(tickers_list, period)
             out_string += temp_string
 
         except Exception as e:
             print(e)
 
     print("end read_tickers")
-    return out_string, sorted(pairs.items(), key=lambda x: x[1]), company_names
+    return out_string, sorted(pairs.items(), key=lambda x: x[1])
 
 
 def index_checker():
@@ -208,14 +222,14 @@ def handler(event, context):
     """
     message = index_checker()
 
-    personal_string, personal_pairs, company_names = read_tickers(mode='personal', period='10d')
+    personal_string, personal_pairs = read_tickers(mode='personal', period='10d')
     message += sep + "RATIOS\n" "\nRatios can be interpreted as percentages ranging from -99.99 representing a total loss of value, to 0.00 which represents a stock is at its high point for the period selected.\n"
-    message += create_message(personal_pairs, mode='personal', company_names=company_names) + sep
+    message += create_message(personal_pairs, mode='personal') + sep
     message += personal_string + sep
-    nsdq_string, nsdq_pairs, company_names = read_tickers(mode='NSDQ', period='10d')
-    message += create_message(nsdq_pairs, mode='S&P', company_names=company_names)
-    snp_string, snp_pairs, company_names = read_tickers(mode='S&P', period='10d')
-    message += create_message(snp_pairs, mode='S&P', company_names=company_names)
+    nsdq_string, nsdq_pairs = read_tickers(mode='NSDQ', period='10d')
+    message += create_message(nsdq_pairs, mode='S&P')
+    snp_string, snp_pairs = read_tickers(mode='S&P', period='10d')
+    message += create_message(snp_pairs, mode='S&P')
     publish_message_sns(message)
 
     return message
