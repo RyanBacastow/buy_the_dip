@@ -11,7 +11,7 @@ import json
 import traceback
 import wget
 
-sep = '\n-----------------------------------------------------------------\n\n'
+sep = '\n--------------------------------------------------------------------------------------------\n'
 
 all_company_names = dict()
 
@@ -48,20 +48,22 @@ def calc_stock(high, current):
     return ratio
 
 
-def create_message(pairs, mode='personal', company_names=all_company_names):
+def create_message(pairs, mode='personal', company_names=all_company_names, period="1y"):
     """
     :param pairs: list: contains ranked pairs
     :return: message: str: string of ranked pairs
     """
-    print("begin create_message")
-    message = f"\n{mode.upper()} ORDERED RATIOS:\n"
+    if period.lower() in ["daily", "weekly", "monthly"]:
+        message = f"\n{mode.upper()} 25 {period.upper()} BIGGEST LOSERS" + sep
+    else:
+        message = f"\nFULL {mode.upper()} ORDERED RATIOS PAST {period.upper()}" + sep
 
     for k, v in pairs:
         try:
             company_name = company_names[k]
             new_pair = f"{k} ({company_name}) : {v}"
             message += new_pair + "\n"
-        except KeyError as e:
+        except Exception as e:
             print(e)
             print(f"Couldn't find {k} in company_names")
 
@@ -73,7 +75,6 @@ def publish_message_sns(message):
     :param message: str: message to be sent to SNS
     :return: None
     """
-    print("begin publish_message_sns")
     sns_arn = env.get('SNS_ARN').strip()
     sns_client = boto3.client('sns')
     try:
@@ -92,53 +93,40 @@ def get_data(tickers_list, period, company_names=all_company_names):
     :param period: str: valid date period for comparison
     :return: temp_string, delta: str, float: stock printing statements and ratio are returned
     """
-    print("begin get_data")
     pairs = dict()
     temp_string = ""
     tickers = " ".join([x.upper() for x in tickers_list]).strip()
     stocks = yf.Tickers(tickers)
     data = stocks.history(env.get('PERIOD', period))['Close']
 
+    print(data.head())
+    print(data.tail())
+
     for ticker in tickers_list:
         try:
             df = data[ticker]
             df.dropna(inplace=True)
             close = df[-1]
-            close_date = df.index[-1]
-
-            try:
-                temp_string += f"{ticker} ({company_names[ticker]}) Close {close_date.strftime('%Y-%m-%d')}: {close:.2f}\n"
-            except:
-                temp_string += f"{ticker} Close {close_date.strftime('%Y-%m-%d')}: {close:.2f}\n"
-
             high = max(df)
-            temp_string += f"{ticker} {env.get('PERIOD', period)}-High: {high:.2f}\n"
-
             delta = calc_stock(high, close)
             pairs[ticker] = delta
 
-            temp_string += f"{ticker} Delta: {delta}\n\n"
-        except keyerror as e:
+        except Exception as e:
             print(f"Couldn't find {ticker} in data")
-
-    print("end get_data")
-    return temp_string, pairs
+    return pairs
 
 
-def read_tickers(mode='personal', period='5y'):
+def read_tickers(mode='personal', period='1y'):
     """
     :param mode: str: personal will use personal_portfolio_stock_tickers.txt. Any other mode will simply use the S&P500
     :param period: str: valid period.
-    :return: out_string,sorted(pairs.items(), key=lambda x: x[1]): str, list: string for message and sorted dict in list
+    :return: sorted(pairs.items(), key=lambda x: x[1]): str, list: string for message and sorted dict in list
     """
-    print("begin read_tickers")
-
     company_names = dict()
     company_names.update(sp_company_names)
     company_names.update(nsdq_company_names)
 
-    if mode == 'personal':
-        out_string = "\n\nPERSONAL PORTFOLIO INDIVIDUAL HOLDING STATS:\n\n"
+    if mode.lower() == 'personal':
         tickers_list = []
         print(f"\nRunning program on personal portfolio with period {period}...\n")
         with open('personal_portfolio_stock_tickers.txt', 'r') as f:
@@ -150,36 +138,28 @@ def read_tickers(mode='personal', period='5y'):
                 if not ticker:
                     break
             try:
-                temp_string, pairs = get_data(tickers_list, period)
-                out_string += temp_string
+                pairs = get_data(tickers_list, period)
 
             except Exception as e:
                 print(e)
                 print(f"ERROR WITH TICKER {ticker}: {e}")
 
     else:
-        out_string = "\n\n"
         print(f"\nRunning program on full {mode.lower()} with period {period}...\n")
 
-        if mode.lower() == 'nsdq':
+        if mode.lower() == 'nasdaq':
             tickers_list = [x for x in nsdq_df.Symbol]
         else:
             tickers_list = [x for x in sp_df.Symbol]
 
-        try:
-            temp_string, pairs = get_data(tickers_list, period)
-            out_string += temp_string
+        pairs = get_data(tickers_list, period)
 
-        except Exception as e:
-            print(e)
-
-    print("end read_tickers")
-    return out_string, sorted(pairs.items(), key=lambda x: x[1])
+    return sorted(pairs.items(), key=lambda x: x[1])
 
 
 def index_checker():
     final_string = f"""Checked indexes and stocks at {datetime.utcnow()} UTC.\n\n"""
-    final_string += """INDEXES\n"""
+    final_string += """\nINDEXES""" + sep
 
     try:
         url = "https://financialmodelingprep.com/api/v3/majors-indexes/"
@@ -217,19 +197,45 @@ def index_checker():
 
 def handler(event, context):
     """
-    This function drives the AWS lambda. Requires 1 env var to work correctly: SNS_TOPIC which represents the topic arn
-    to which you want to publish.
+    This function drives the AWS lambda. Requires 1 env var to work correctly: SNS_TOPIC which represents the topic arn to which
+    you want to publish.
     """
     message = index_checker()
+    message += "\nRATIOS" + sep + """
+                                 \nRatios can be interpreted as percentages ranging from -99.99 representing a total 
+                                 loss of value, to 0.00 which represents that a stock is at its high point for 
+                                 the period selected.\n 
+                                  """
 
-    personal_string, personal_pairs = read_tickers(mode='personal', period=env.get('PERIOD', "1y"))
-    message += sep + "RATIOS\n" "\nRatios can be interpreted as percentages ranging from -99.99 representing a total loss of value, to 0.00 which represents a stock is at its high point for the period selected.\n"
-    message += create_message(personal_pairs, mode='personal') + sep
-    message += personal_string + sep
-    nsdq_string, nsdq_pairs = read_tickers(mode='NSDQ', period=env.get('PERIOD', "1y"))
-    message += create_message(nsdq_pairs, mode='S&P')
-    snp_string, snp_pairs = read_tickers(mode='S&P', period=env.get('PERIOD', "1y"))
-    message += create_message(snp_pairs, mode='S&P')
+    daily_nsdq = read_tickers(mode="NASDAQ", period="2d")
+    daily_nsdq = daily_nsdq[:24]
+
+    message += create_message(daily_nsdq, mode='NASDAQ', period="daily")
+
+    daily_snp = read_tickers(mode="S&P", period="2d")[:25]
+    message += create_message(daily_snp, mode='S&P', period="daily")
+
+    weekly_nsdq = read_tickers(mode="NASDAQ", period="1w")[:25]
+    message += create_message(weekly_nsdq, mode='NASDAQ', period="weekly")
+
+    weekly_snp = read_tickers(mode="S&P", period="6d")[:25]
+    message += create_message(weekly_snp, mode='S&P', period="weekly")
+
+    monthly_nsdq = read_tickers(mode="NASDAQ", period="6d")[:25]
+    message += create_message(monthly_nsdq, mode='NASDAQ', period="monthly")
+
+    monthly_snp = read_tickers(mode="S&P", period="1mo")[:25]
+    message += create_message(monthly_snp, mode='S&P', period="monthly")
+
+    personal_pairs = read_tickers(mode='personal', period=env.get('PERIOD', "1y"))
+
+    message += create_message(personal_pairs, mode='personal', period="1y")
+
+    nsdq_pairs = read_tickers(mode='NASDAQ', period=env.get('PERIOD', "1y"))
+    message += create_message(nsdq_pairs, mode='NASDAQ', period="1y")
+
+    snp_pairs = read_tickers(mode='S&P', period=env.get('PERIOD', "1y"))
+    message += create_message(snp_pairs, mode='S&P', period="1y")
+
     publish_message_sns(message)
-
     return message
